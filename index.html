@@ -1,0 +1,1847 @@
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MeetTime - 스마트 모임 시간 조율</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .slide-enter-right {
+      animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .slide-enter-left {
+      animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideInLeft {
+      from { transform: translateX(-30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .pulse-ring {
+      box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
+      animation: pulseEffect 1.8s infinite;
+    }
+    @keyframes pulseEffect {
+      0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+      70% { box-shadow: 0 0 0 8px rgba(79, 70, 229, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-800">
+
+  <!-- Top App Navigation -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm backdrop-blur-md bg-white/95">
+    <div class="max-w-2xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
+      <div class="flex items-center space-x-1.5 flex-shrink-0">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-200">
+          <i class="fa-regular fa-calendar-check text-sm"></i>
+        </div>
+        <span class="font-bold text-base sm:text-lg tracking-tight bg-gradient-to-r from-indigo-700 to-indigo-500 bg-clip-text text-transparent">MeetSync</span>
+      </div>
+
+      <div class="flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0">
+        <button id="btnRoomBadge" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold px-2 py-1.5 rounded-lg flex items-center gap-1 transition border border-amber-200 whitespace-nowrap">
+          <i class="fa-solid fa-hashtag text-amber-600"></i>
+          <span id="currentRoomCodeLabel" class="max-w-[90px] sm:max-w-[130px] truncate">방: ------</span>
+        </button>
+        <button id="btnShareLink" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-2 py-1.5 rounded-lg flex items-center gap-1 transition whitespace-nowrap">
+          <i class="fa-solid fa-share-nodes text-slate-500"></i>
+          <span class="hidden sm:inline">공유</span>
+        </button>
+        <button id="btnOpenSupabaseModal" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 transition border border-slate-200 whitespace-nowrap">
+          <i class="fa-solid fa-database text-slate-500"></i>
+          <span id="supabaseStatusBadge">DB 설정</span>
+        </button>
+        <button id="btnProfileBadge" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-2 py-1.5 rounded-lg flex items-center gap-1 transition border border-indigo-200/60 whitespace-nowrap">
+          <i class="fa-regular fa-user text-indigo-500"></i>
+          <span id="currentUserNameLabel" class="max-w-[60px] truncate">내 이름</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Navigation Tabs -->
+    <div class="max-w-2xl mx-auto px-4 flex border-t border-slate-100">
+      <button id="tabBtn1" class="flex-1 py-3 text-sm font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center justify-center gap-2 transition-all">
+        <i class="fa-regular fa-calendar-plus text-base"></i>
+        <span>1. 내 일정 등록</span>
+      </button>
+      <button id="tabBtn2" class="flex-1 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent flex items-center justify-center gap-2 transition-all">
+        <i class="fa-solid fa-users-viewfinder text-base"></i>
+        <span>2. 취합 결과 보기</span>
+        <span id="badgeParticipantCount" class="bg-indigo-100 text-indigo-800 text-[11px] font-bold px-1.5 py-0.2 rounded-full ml-0.5">0명</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Wrapper -->
+  <main class="flex-1 max-w-2xl w-full mx-auto p-4 pb-24">
+    
+    <!-- ============================================== -->
+    <!-- TAB 1: 내 가능 시간 등록 뷰                    -->
+    <!-- ============================================== -->
+    <div id="tabContent1" class="space-y-4">
+      
+      <!-- Calendar Card -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 transition-all">
+        <!-- Calendar Header -->
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center space-x-2">
+            <h2 id="calendarMonthTitle" class="text-base font-bold text-slate-900 tracking-tight">2026년 10월</h2>
+            <button id="btnToday" class="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium px-2 py-0.5 rounded-full transition">
+              오늘
+            </button>
+          </div>
+          <div class="flex items-center space-x-1">
+            <button id="btnPrevMonth" class="w-8 h-8 rounded-full hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center text-slate-600 transition" title="이전 달">
+              <i class="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+            <button id="btnNextMonth" class="w-8 h-8 rounded-full hover:bg-slate-100 active:bg-slate-200 flex items-center justify-center text-slate-600 transition" title="다음 달">
+              <i class="fa-solid fa-chevron-right text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Calendar Weekday Legend -->
+        <div class="grid grid-cols-7 gap-1 text-center mb-1 text-xs font-semibold">
+          <span class="text-rose-500 py-1">일</span>
+          <span class="text-slate-500 py-1">월</span>
+          <span class="text-slate-500 py-1">화</span>
+          <span class="text-slate-500 py-1">수</span>
+          <span class="text-slate-500 py-1">목</span>
+          <span class="text-slate-500 py-1">금</span>
+          <span class="text-blue-500 py-1">토</span>
+        </div>
+
+        <!-- Calendar Days Grid (Interactive Swipeable Container) -->
+        <div id="calendarSwipeWrapper" class="overflow-hidden touch-pan-y relative select-none">
+          <div id="calendarGrid" class="grid grid-cols-7 gap-1.5 text-center transition-transform duration-200">
+            <!-- Dynamically populated days -->
+          </div>
+        </div>
+
+        <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 px-1">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> 점이 있는 날짜: 선택한 시간 있음
+          </span>
+          <span class="text-slate-400">좌우 스와이프로 월 이동</span>
+        </div>
+      </section>
+
+      <!-- Hourly Time Selection Card -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4">
+        <!-- Selected Date Header & Quick Actions -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div>
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 block">선택한 날짜</span>
+            <h3 id="selectedDateDisplay" class="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span>2026. 10. 02 (금)</span>
+              <span id="selectedCountOnDate" class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">0개 선택됨</span>
+            </h3>
+          </div>
+          
+          <!-- Bulk toggles -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button id="btnQuickSelectMorning" class="text-[11px] px-2 py-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-medium rounded-lg transition">
+              오전 전체
+            </button>
+            <button id="btnQuickSelectAfternoon" class="text-[11px] px-2 py-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-medium rounded-lg transition">
+              오후 전체
+            </button>
+            <button id="btnQuickClearDate" class="text-[11px] px-2 py-1 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-600 font-medium rounded-lg transition">
+              이 날짜 초기화
+            </button>
+          </div>
+        </div>
+
+        <!-- Morning Slots Section -->
+        <div class="mt-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <i class="fa-regular fa-sun text-amber-500"></i> 오전 (08:00 ~ 12:00)
+            </span>
+            <span class="text-[11px] text-slate-400">1시간 단위</span>
+          </div>
+          <div id="morningSlotGrid" class="grid grid-cols-4 sm:grid-cols-4 gap-2">
+            <!-- Morning buttons generated by JS -->
+          </div>
+        </div>
+
+        <!-- Afternoon Slots Section -->
+        <div class="mt-5">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-moon text-indigo-400"></i> 오후 (12:00 ~ 24:00)
+            </span>
+            <span class="text-[11px] text-slate-400">1시간 단위</span>
+          </div>
+          <div id="afternoonSlotGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            <!-- Afternoon buttons generated by JS -->
+          </div>
+        </div>
+
+        <!-- Save Indicator & Action Bar -->
+        <div class="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between">
+          <div class="flex items-center space-x-1.5 text-xs text-emerald-600 font-medium" id="syncStatusIndicator">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>실시간 자동 동기화</span>
+          </div>
+          <button id="btnGoToResultTab" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 active:scale-95">
+            <span>취합 결과 보기</span>
+            <i class="fa-solid fa-arrow-right text-[11px]"></i>
+          </button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 2: 전체 취합 결과 뷰 (히트맵)              -->
+    <!-- ============================================== -->
+    <div id="tabContent2" class="space-y-4 hidden">
+      
+      <!-- Top Overview Bar -->
+      <section class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 rounded-2xl text-white p-4 shadow-md">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <span class="text-indigo-300 text-xs font-semibold tracking-wider uppercase">현재 모임 취합 현황</span>
+            <h2 class="text-lg font-bold">우리 언제 만날까요?</h2>
+          </div>
+          <div class="text-right">
+            <span class="text-2xl font-black text-indigo-300" id="statParticipantCount">0</span>
+            <span class="text-xs text-indigo-200">명 응답완료</span>
+          </div>
+        </div>
+
+        <!-- Participant Avatar Chips -->
+        <div class="mt-2 pt-2 border-t border-indigo-700/50 flex flex-wrap items-center gap-1.5" id="participantChipsContainer">
+          <!-- Dynamic Participant Chips -->
+        </div>
+
+        <div class="mt-3 pt-2 border-t border-indigo-700/40 flex items-center justify-between text-[11px] text-indigo-200">
+          <span id="dbConnectionText"><i class="fa-solid fa-circle-info mr-1"></i>실시간 데이터 취합 모드</span>
+          <div class="flex items-center gap-2">
+            <button id="btnSwitchRoom" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white px-2 py-1 rounded-md transition font-medium flex items-center gap-1">
+              <i class="fa-solid fa-door-open text-[10px]"></i> 방 변경
+            </button>
+            <button id="btnRefreshResults" class="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white px-2 py-1 rounded-md transition font-medium flex items-center gap-1">
+              <i class="fa-solid fa-rotate-right text-[10px]"></i> 새로고침
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Best Meeting Recommendation Card -->
+      <section id="bestTimesCard" class="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs shadow-sm">
+            <i class="fa-solid fa-crown"></i>
+          </div>
+          <h3 class="font-bold text-amber-900 text-sm">가장 많이 모일 수 있는 골든 타임 Top 3</h3>
+        </div>
+        <div id="goldenTimesList" class="space-y-1.5 text-xs text-amber-950">
+          <!-- Dynamically populated top 3 slots -->
+        </div>
+      </section>
+
+      <!-- Heatmap Viewer Card -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4">
+        <!-- Date Selector for Results -->
+        <div class="mb-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <i class="fa-regular fa-calendar text-indigo-600"></i> 결과 확인할 날짜 선택
+            </span>
+            <span class="text-[11px] text-slate-400">가로로 넘겨보세요</span>
+          </div>
+          <div id="resultDateScroll" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+            <!-- Dynamic Date Buttons -->
+          </div>
+        </div>
+
+        <!-- Heatmap Color Intensity Legend -->
+        <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl mb-4 border border-slate-100 text-xs">
+          <span class="text-slate-600 font-medium text-[11px]">가능 인원수 색상:</span>
+          <div class="flex items-center space-x-1.5 text-[10px] text-slate-500">
+            <span>0명</span>
+            <span class="w-4 h-4 rounded bg-slate-100 border border-slate-200"></span>
+            <span class="w-4 h-4 rounded bg-emerald-100"></span>
+            <span class="w-4 h-4 rounded bg-emerald-300"></span>
+            <span class="w-4 h-4 rounded bg-emerald-500"></span>
+            <span class="w-4 h-4 rounded bg-emerald-700"></span>
+            <span>전원</span>
+          </div>
+        </div>
+
+        <!-- Heatmap Hourly Slots Matrix -->
+        <div class="space-y-1.5" id="resultHeatmapList">
+          <!-- Dynamically rendered rows for selected date -->
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- Name Input Modal (On Initial Load / Change Name) -->
+  <div id="nameModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 transform transition-all">
+      <div class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-3 text-xl shadow-inner">
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <h3 class="text-center text-lg font-bold text-slate-900 mb-1">모임 일정 조율 시작</h3>
+      <p class="text-center text-xs text-slate-500 mb-4 leading-relaxed">
+        이름을 입력하고 방을 새로 만들거나 코드로 입장하세요.
+      </p>
+
+      <form id="nameForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">내 이름 (닉네임)</label>
+          <input type="text" id="inputUserName" required maxlength="12" placeholder="예: 김민수, 지영, 개발자Lee"
+                 class="w-full px-4 py-2.5 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800 placeholder-slate-400">
+        </div>
+
+        <div class="pt-1">
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">모임 방 선택</label>
+          
+          <!-- Mode Tabs: New Room vs Join with Code vs Existing Rooms -->
+          <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl mb-3">
+            <button type="button" id="tabModeCreate" class="py-2 text-[11px] font-bold rounded-lg transition bg-white text-indigo-700 shadow-sm flex items-center justify-center">
+              <i class="fa-solid fa-plus mr-1"></i>새 방
+            </button>
+            <button type="button" id="tabModeJoin" class="py-2 text-[11px] font-medium rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center">
+              <i class="fa-solid fa-key mr-1"></i>코드 입력
+            </button>
+            <button type="button" id="tabModeExisting" class="py-2 text-[11px] font-medium rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center">
+              <i class="fa-solid fa-list-check mr-1"></i>기존 방
+            </button>
+          </div>
+
+          <!-- Create Mode View -->
+          <div id="sectionCreateRoom" class="space-y-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">모임/방 이름</label>
+              <input type="text" id="inputRoomTitle" maxlength="24" placeholder="예: 팀 정기 회의, 주말 스터디, 번개 모임"
+                     class="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800 placeholder-slate-400">
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 mt-2">
+              <div>
+                <span class="text-[11px] text-indigo-500 font-medium block">생성될 6자리 방 코드</span>
+                <span id="displayGeneratedCode" class="text-lg font-black tracking-widest text-indigo-700 font-mono">123456</span>
+              </div>
+              <button type="button" id="btnRerollCode" class="text-xs bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 rounded-lg font-semibold transition active:scale-95">
+                <i class="fa-solid fa-arrows-rotate mr-1"></i>새로 생성
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400">이 코드를 공유하면 친구들이 같은 방으로 참여할 수 있습니다.</p>
+          </div>
+
+          <!-- Join Mode View -->
+          <div id="sectionJoinRoom" class="space-y-2 hidden">
+            <div>
+              <input type="text" id="inputJoinRoomCode" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="6자리 숫자 (예: 582194)"
+                     class="w-full px-4 py-2.5 text-center text-lg font-mono font-bold tracking-widest rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-sm placeholder:font-normal placeholder:tracking-normal">
+            </div>
+            <p class="text-[11px] text-slate-400">공유받은 6자리 숫자를 입력해 주세요.</p>
+          </div>
+
+          <!-- Existing Rooms Mode View -->
+          <div id="sectionExistingRoom" class="space-y-2 hidden">
+            <div class="flex items-center justify-between px-0.5">
+              <span class="text-[11px] text-slate-500 font-medium">참여 가능한 방 목록</span>
+              <button type="button" id="btnRefreshExistingRooms" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 transition">
+                <i class="fa-solid fa-rotate-right text-[10px]"></i> 새로고침
+              </button>
+            </div>
+            <div id="existingRoomsList" class="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar p-0.5">
+              <!-- Dynamically populated room cards -->
+            </div>
+            <p id="existingRoomTipText" class="text-[11px] text-slate-400">입장할 방을 터치하여 선택해 주세요.</p>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-200 transition">
+          일정 조율 방 입장하기
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Detail Popover Modal: Who is available at this time -->
+  <div id="timeDetailModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 transform transition-all max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <span id="modalDetailDate" class="text-xs font-semibold text-indigo-600">2026. 10. 02 (금)</span>
+          <h4 id="modalDetailTime" class="text-base font-bold text-slate-800">14:00 ~ 15:00 가능 인원</h4>
+        </div>
+        <button id="btnCloseTimeDetail" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="py-4 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+        <!-- Available Users -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-check"></i> 가능한 사람 (<span id="modalAvailCount">0</span>명)
+            </span>
+          </div>
+          <div id="modalAvailList" class="flex flex-wrap gap-1.5">
+            <!-- Dynamic Badges -->
+          </div>
+        </div>
+
+        <!-- Unavailable Users -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-xmark"></i> 안 되는 사람 (<span id="modalUnavailCount">0</span>명)
+            </span>
+          </div>
+          <div id="modalUnavailList" class="flex flex-wrap gap-1.5">
+            <!-- Dynamic Badges -->
+          </div>
+        </div>
+      </div>
+
+      <button id="btnModalCloseConfirm" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition">
+        확인 닫기
+      </button>
+    </div>
+  </div>
+
+  <!-- Supabase Settings Modal -->
+  <div id="supabaseModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 transform transition-all">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-2">
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-base">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-900 text-base">Supabase DB 연결</h3>
+            <p class="text-[11px] text-slate-500">실시간 다인원 일정 공유 연동</p>
+          </div>
+        </div>
+        <button id="btnCloseSupabaseModal" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed">
+        Supabase 대시보드의 <strong>Project Settings &gt; API</strong>에 있는 <strong>URL</strong>과 <strong>anon public key</strong>를 입력해주세요. 입력하지 않아도 현재 브라우저 내에서 자유롭게 테스트할 수 있습니다.
+      </p>
+
+      <form id="supabaseForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Project URL</label>
+          <input type="url" id="inputSupabaseUrl" placeholder="https://your-project.supabase.co"
+                 class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-800">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Anon Public Key</label>
+          <input type="text" id="inputSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVC..."
+                 class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-800">
+        </div>
+        
+        <div class="pt-2 flex gap-2">
+          <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition">
+            연결 및 동기화 시작
+          </button>
+          <button type="button" id="btnDisconnectSupabase" class="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-xs rounded-xl transition">
+            연결 해제
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div id="toastNotification" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg z-50 flex items-center gap-2 pointer-events-none transition-all duration-300 opacity-0 translate-y-4">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMessage">알림 내용</span>
+  </div>
+
+  <script>
+    // ==============================================================
+    // [수파베이스 설정 위치]
+    // ==============================================================
+    const SUPABASE_CONFIG = {
+      url: "",      // 예: "https://abcdefghijklmn.supabase.co"
+      anonKey: ""   // 예: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    };
+
+    let supabaseClient = null;
+    let realtimeChannel = null;
+
+    let currentRoomCode = "";
+    let currentRoomTitle = "";
+    let roomMode = "create"; // 'create' | 'join' | 'existing'
+    let generatedRoomCode = generate6DigitCode();
+    let selectedExistingRoomCode = "";
+    let selectedExistingRoomTitle = "";
+    const sessionVisitedRooms = new Map(); // room_code -> title
+
+    function generate6DigitCode() {
+      return String(Math.floor(100000 + Math.random() * 900000));
+    }
+
+    // Supabase URL 자동 정제 함수 (끝 슬래시, 따옴표, 대시보드 URL 자동 보정)
+    function sanitizeSupabaseUrl(rawUrl) {
+      if (!rawUrl) return "";
+      let cleaned = rawUrl.trim().replace(/^["']|["']$/g, ''); // 따옴표 제거
+      cleaned = cleaned.replace(/\/+$/, ''); // 끝에 붙은 '/' 슬래시 제거
+
+      // 사용자가 대시보드 URL(supabase.com/dashboard/project/xxxx)을 복사해 넣은 경우 자동 변환
+      const dashboardMatch = cleaned.match(/supabase\.com\/dashboard\/project\/([a-zA-Z0-9_-]+)/);
+      if (dashboardMatch && dashboardMatch[1]) {
+        cleaned = `https://${dashboardMatch[1]}.supabase.co`;
+      }
+      return cleaned;
+    }
+
+    function sanitizeSupabaseKey(rawKey) {
+      if (!rawKey) return "";
+      return rawKey.trim().replace(/^["']|["']$/g, '');
+    }
+
+    // Initialize Supabase if keys exist with live validation query
+    async function initSupabase(url, key) {
+      const cleanUrl = sanitizeSupabaseUrl(url);
+      const cleanKey = sanitizeSupabaseKey(key);
+
+      if (!cleanUrl || !cleanKey) {
+        supabaseClient = null;
+        updateSupabaseUIStatus(false);
+        return;
+      }
+
+      if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        showToast("오류: Project URL은 https:// 로 시작해야 합니다.");
+        updateSupabaseUIStatus(false);
+        return;
+      }
+
+      try {
+        SUPABASE_CONFIG.url = cleanUrl;
+        SUPABASE_CONFIG.anonKey = cleanKey;
+        supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        
+        // 1. 실제 테이블 및 컬럼 접근 권한 테스트 쿼리 실행
+        const testRes = await supabaseClient
+          .from('availabilities')
+          .select('id, room_code')
+          .limit(1);
+
+        if (testRes.error) {
+          console.error("Supabase 연결 진단 실패:", testRes.error);
+          updateSupabaseUIStatus(false);
+          if (testRes.error.code === '42P01') {
+            showToast("오류: 'availabilities' 테이블이 없습니다. SQL을 실행해주세요!");
+          } else if (testRes.error.message && testRes.error.message.includes('room_code')) {
+            showToast("오류: 'room_code' 컬럼이 없습니다. SQL을 실행해주세요!");
+          } else if (testRes.error.message && testRes.error.message.includes('Invalid path')) {
+            showToast("Project URL 주소를 확인해주세요 (끝에 슬래시 없는 https://xxx.supabase.co 형태)");
+          } else {
+            showToast(`DB 오류: ${testRes.error.message}`);
+          }
+          return;
+        }
+
+        updateSupabaseUIStatus(true);
+        if (currentRoomCode) {
+          fetchRemoteAvailabilities();
+          subscribeToRemoteChanges();
+        }
+        showToast("Supabase DB 연결 성공!");
+      } catch (err) {
+        console.error("Supabase init error:", err);
+        updateSupabaseUIStatus(false);
+        showToast(`연결 실패: ${err.message || 'URL 및 Key를 확인해주세요'}`);
+      }
+    }
+
+    // URL 해시 및 로컬에 저장된 Supabase 설정 & 방 코드 자동 로드
+    function loadAutoSupabaseConfig() {
+      // 1. 공유 링크의 # 해시 파라미터 확인 (#room=...&title=...&sb_url=...&sb_key=...)
+      if (window.location.hash) {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const urlParam = params.get('sb_url');
+        const keyParam = params.get('sb_key');
+        const roomParam = params.get('room');
+        const titleParam = params.get('title');
+
+        if (roomParam && /^[0-9]{6}$/.test(roomParam)) {
+          currentRoomCode = roomParam;
+          if (titleParam) {
+            currentRoomTitle = decodeURIComponent(titleParam);
+          }
+          // Set to join mode directly
+          setRoomMode('join');
+          const joinInput = document.getElementById('inputJoinRoomCode');
+          if (joinInput) joinInput.value = currentRoomCode;
+        }
+
+        if (urlParam && keyParam) {
+          try {
+            const decodedUrl = decodeURIComponent(urlParam);
+            const decodedKey = decodeURIComponent(keyParam);
+            initSupabase(decodedUrl, decodedKey);
+            return;
+          } catch (e) {
+            console.warn("해시 파싱 오류:", e);
+          }
+        }
+      }
+
+      // 2. 코드 상단 SUPABASE_CONFIG에 작성되어 있는 경우
+      if (SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+        initSupabase(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      }
+    }
+
+    function updateSupabaseUIStatus(isConnected) {
+      const badge = document.getElementById('supabaseStatusBadge');
+      const connText = document.getElementById('dbConnectionText');
+      if (isConnected) {
+        badge.textContent = "DB 연결됨";
+        badge.parentElement.className = "text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition border border-emerald-300";
+        connText.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400 mr-1"></i>Supabase 실시간 클라우드 동기화 중';
+      } else {
+        badge.textContent = "DB 연결 설정";
+        badge.parentElement.className = "text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition border border-slate-200";
+        connText.innerHTML = '<i class="fa-solid fa-circle-info mr-1"></i>로컬 단독 모드 (DB 미연결)';
+      }
+    }
+
+    // ==========================================
+    // State Management
+    // ==========================================
+    const HOURLY_SLOTS = [
+      { id: "08:00", label: "08:00 - 09:00", period: "morning", short: "08:00" },
+      { id: "09:00", label: "09:00 - 10:00", period: "morning", short: "09:00" },
+      { id: "10:00", label: "10:00 - 11:00", period: "morning", short: "10:00" },
+      { id: "11:00", label: "11:00 - 12:00", period: "morning", short: "11:00" },
+      { id: "12:00", label: "12:00 - 13:00", period: "afternoon", short: "12:00" },
+      { id: "13:00", label: "13:00 - 14:00", period: "afternoon", short: "13:00" },
+      { id: "14:00", label: "14:00 - 15:00", period: "afternoon", short: "14:00" },
+      { id: "15:00", label: "15:00 - 16:00", period: "afternoon", short: "15:00" },
+      { id: "16:00", label: "16:00 - 17:00", period: "afternoon", short: "16:00" },
+      { id: "17:00", label: "17:00 - 18:00", period: "afternoon", short: "17:00" },
+      { id: "18:00", label: "18:00 - 19:00", period: "afternoon", short: "18:00" },
+      { id: "19:00", label: "19:00 - 20:00", period: "afternoon", short: "19:00" },
+      { id: "20:00", label: "20:00 - 21:00", period: "afternoon", short: "20:00" },
+      { id: "21:00", label: "21:00 - 22:00", period: "afternoon", short: "21:00" },
+      { id: "22:00", label: "22:00 - 23:00", period: "afternoon", short: "22:00" },
+      { id: "23:00", label: "23:00 - 24:00", period: "afternoon", short: "23:00" }
+    ];
+
+    let currentUserName = "";
+    const today = new Date();
+    let currentViewingYear = today.getFullYear();
+    let currentViewingMonth = today.getMonth();
+    let selectedDateString = formatDateKey(today);
+    let activeResultDateString = selectedDateString;
+    let activeTab = 1;
+
+    // Clean data store: { [userName]: Set of "YYYY-MM-DD_HH:mm" }
+    const meetingData = {};
+
+    // Fetch records filtered by current room_code from Supabase
+    async function fetchRemoteAvailabilities() {
+      if (!supabaseClient || !currentRoomCode) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('availabilities')
+          .select('user_name, slot_key, room_code, room_title')
+          .eq('room_code', currentRoomCode);
+
+        if (error) {
+          console.warn("데이터 가져오기 오류:", error.message);
+          showToast(`데이터 로드 실패: ${error.message}`);
+          return;
+        }
+
+        // Clear existing store and rebuild with fresh remote data for this room
+        for (const k in meetingData) delete meetingData[k];
+
+        if (data && Array.isArray(data)) {
+          data.forEach(row => {
+            if (row.room_title && !currentRoomTitle) {
+              currentRoomTitle = row.room_title;
+              updateRoomCodeDisplay();
+            }
+            if (!meetingData[row.user_name]) {
+              meetingData[row.user_name] = new Set();
+            }
+            meetingData[row.user_name].add(row.slot_key);
+          });
+        }
+
+        // Ensure current user is in meetingData
+        if (currentUserName && !meetingData[currentUserName]) {
+          meetingData[currentUserName] = new Set();
+        }
+
+        updateParticipantsCountBadge();
+        renderCalendar(0);
+        renderHourlySlotSection();
+        renderAggregatedResults();
+      } catch (err) {
+        console.error("fetchRemoteAvailabilities exception:", err);
+      }
+    }
+
+    // Subscribe to realtime changes filtered by room_code
+    function subscribeToRemoteChanges() {
+      if (!supabaseClient || !currentRoomCode) return;
+      if (realtimeChannel) {
+        supabaseClient.removeChannel(realtimeChannel);
+      }
+
+      realtimeChannel = supabaseClient
+        .channel(`availabilities_room_${currentRoomCode}`)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'availabilities',
+          filter: `room_code=eq.${currentRoomCode}`
+        }, () => {
+          fetchRemoteAvailabilities();
+        })
+        .subscribe();
+    }
+
+    // Remote persistence for a toggled slot including room_code
+    async function syncSlotToRemote(slotKey, isAdded) {
+      const syncStatus = document.getElementById('syncStatusIndicator');
+      if (!supabaseClient) {
+        if (syncStatus) {
+          syncStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-500"></i><span class="text-amber-600">로컬 임시 저장 (DB 미연결)</span>';
+        }
+        return;
+      }
+      if (!currentUserName || !currentRoomCode) return;
+
+      if (syncStatus) {
+        syncStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-indigo-500"></i><span class="text-slate-500">클라우드 저장 중...</span>';
+      }
+
+      try {
+        let result;
+        if (isAdded) {
+          result = await supabaseClient
+            .from('availabilities')
+            .insert([{ 
+              user_name: currentUserName, 
+              slot_key: slotKey,
+              room_code: currentRoomCode,
+              room_title: currentRoomTitle || '모임 일정'
+            }]);
+        } else {
+          result = await supabaseClient
+            .from('availabilities')
+            .delete()
+            .eq('user_name', currentUserName)
+            .eq('slot_key', slotKey)
+            .eq('room_code', currentRoomCode);
+        }
+
+        if (result.error) {
+          console.error("DB 저장 오류:", result.error);
+          if (syncStatus) {
+            syncStatus.innerHTML = '<i class="fa-solid fa-circle-exclamation text-rose-500"></i><span class="text-rose-600">저장 실패</span>';
+          }
+          showToast(`저장 실패: ${result.error.message}`);
+        } else {
+          if (syncStatus) {
+            syncStatus.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-600"></i><span class="text-emerald-600">실시간 저장 완료</span>';
+          }
+        }
+      } catch (err) {
+        console.error("syncSlotToRemote error:", err);
+        if (syncStatus) {
+          syncStatus.innerHTML = '<i class="fa-solid fa-circle-exclamation text-rose-500"></i><span class="text-rose-600">저장 오류 발생</span>';
+        }
+      }
+    }
+
+    // Remote persistence for bulk dates
+    async function syncBulkSlotsToRemote(slotKeysToAdd, slotKeysToRemove) {
+      if (!supabaseClient || !currentUserName || !currentRoomCode) return;
+      try {
+        if (slotKeysToRemove && slotKeysToRemove.length > 0) {
+          for (const sk of slotKeysToRemove) {
+            await supabaseClient
+              .from('availabilities')
+              .delete()
+              .eq('user_name', currentUserName)
+              .eq('slot_key', sk)
+              .eq('room_code', currentRoomCode);
+          }
+        }
+        if (slotKeysToAdd && slotKeysToAdd.length > 0) {
+          const rows = slotKeysToAdd.map(sk => ({
+            user_name: currentUserName,
+            slot_key: sk,
+            room_code: currentRoomCode,
+            room_title: currentRoomTitle || '모임 일정'
+          }));
+          const { error } = await supabaseClient
+            .from('availabilities')
+            .insert(rows);
+          if (error) {
+            console.error("일괄 등록 실패:", error);
+            showToast(`저장 실패: ${error.message}`);
+          }
+        }
+      } catch (err) {
+        console.error("syncBulkSlotsToRemote error:", err);
+      }
+    }
+
+    // Helper: Date Key Formatting "YYYY-MM-DD"
+    function formatDateKey(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // Helper: Parse Date Key back to Date
+    function parseDateKey(keyStr) {
+      const parts = keyStr.split('-');
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+
+    // Helper: Formatted Korean date label
+    function getKoreanDateLabel(dateKey) {
+      const d = parseDateKey(dateKey);
+      const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${weekDays[d.getDay()]})`;
+    }
+
+    // ==========================================
+    // Calendar Generation & Swipe Handling
+    // ==========================================
+    const calendarGrid = document.getElementById('calendarGrid');
+    const calendarMonthTitle = document.getElementById('calendarMonthTitle');
+    const calendarSwipeWrapper = document.getElementById('calendarSwipeWrapper');
+
+    function renderCalendar(direction = 0) {
+      calendarMonthTitle.textContent = `${currentViewingYear}년 ${currentViewingMonth + 1}월`;
+      
+      // Animation class for direction
+      if (direction > 0) {
+        calendarGrid.classList.remove('slide-enter-right', 'slide-enter-left');
+        void calendarGrid.offsetWidth;
+        calendarGrid.classList.add('slide-enter-right');
+      } else if (direction < 0) {
+        calendarGrid.classList.remove('slide-enter-right', 'slide-enter-left');
+        void calendarGrid.offsetWidth;
+        calendarGrid.classList.add('slide-enter-left');
+      }
+
+      calendarGrid.innerHTML = '';
+
+      const firstDayOfMonth = new Date(currentViewingYear, currentViewingMonth, 1);
+      const startDayOfWeek = firstDayOfMonth.getDay(); // 0(Sun) - 6(Sat)
+      const lastDateOfMonth = new Date(currentViewingYear, currentViewingMonth + 1, 0).getDate();
+      
+      // Prev month trailing days
+      const lastDateOfPrevMonth = new Date(currentViewingYear, currentViewingMonth, 0).getDate();
+      for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const prevDayNum = lastDateOfPrevMonth - i;
+        const cell = document.createElement('div');
+        cell.className = 'h-11 flex flex-col items-center justify-center text-xs text-slate-300 font-medium cursor-not-allowed select-none';
+        cell.textContent = prevDayNum;
+        calendarGrid.appendChild(cell);
+      }
+
+      // Days of the current month
+      const userSchedule = (currentUserName && meetingData[currentUserName]) ? meetingData[currentUserName] : new Set();
+      const todayKey = formatDateKey(today);
+
+      for (let day = 1; day <= lastDateOfMonth; day++) {
+        const currentDate = new Date(currentViewingYear, currentViewingMonth, day);
+        const dateKey = formatDateKey(currentDate);
+        const dayOfWeek = currentDate.getDay();
+
+        // Check if user has selected any hours on this date
+        let hasSelectedSlot = false;
+        if (userSchedule) {
+          for (const item of userSchedule) {
+            if (item.startsWith(dateKey)) {
+              hasSelectedSlot = true;
+              break;
+            }
+          }
+        }
+
+        const isSelected = (selectedDateString === dateKey);
+        const isToday = (todayKey === dateKey);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-date', dateKey);
+
+        let textColor = 'text-slate-700';
+        if (dayOfWeek === 0) textColor = 'text-rose-600';
+        if (dayOfWeek === 6) textColor = 'text-blue-600';
+
+        let baseClasses = 'h-11 w-full rounded-xl flex flex-col items-center justify-center relative transition font-semibold text-xs active:scale-95 ';
+        
+        if (isSelected) {
+          btn.className = baseClasses + 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-300 ring-2 ring-indigo-600 ring-offset-2';
+        } else if (isToday) {
+          btn.className = baseClasses + `${textColor} bg-indigo-50 border border-indigo-200 font-bold hover:bg-indigo-100`;
+        } else {
+          btn.className = baseClasses + `${textColor} hover:bg-slate-100`;
+        }
+
+        // Inner day number
+        const numSpan = document.createElement('span');
+        numSpan.textContent = day;
+        btn.appendChild(numSpan);
+
+        // Indicator dot if user has selected slots on this day
+        if (hasSelectedSlot) {
+          const dot = document.createElement('span');
+          dot.className = `w-1.5 h-1.5 rounded-full absolute bottom-1 ${isSelected ? 'bg-white' : 'bg-indigo-600'}`;
+          btn.appendChild(dot);
+        }
+
+        btn.addEventListener('click', () => {
+          selectedDateString = dateKey;
+          renderCalendar(0);
+          renderHourlySlotSection();
+        });
+
+        calendarGrid.appendChild(btn);
+      }
+
+      // Next month leading padding
+      const totalRendered = startDayOfWeek + lastDateOfMonth;
+      const nextMonthPadding = (totalRendered % 7 === 0) ? 0 : 7 - (totalRendered % 7);
+      for (let i = 1; i <= nextMonthPadding; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'h-11 flex flex-col items-center justify-center text-xs text-slate-300 font-medium cursor-not-allowed select-none';
+        cell.textContent = i;
+        calendarGrid.appendChild(cell);
+      }
+    }
+
+    // Touch Swipe Gesture for Calendar
+    let touchStartX = 0;
+    let touchEndX = 0;
+    calendarSwipeWrapper.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    calendarSwipeWrapper.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleCalendarSwipe();
+    }, { passive: true });
+
+    function handleCalendarSwipe() {
+      const diffX = touchEndX - touchStartX;
+      if (Math.abs(diffX) > 40) {
+        if (diffX < 0) {
+          // Swiped Left -> Next Month
+          navigateMonth(1);
+        } else {
+          // Swiped Right -> Prev Month
+          navigateMonth(-1);
+        }
+      }
+    }
+
+    function navigateMonth(delta) {
+      currentViewingMonth += delta;
+      if (currentViewingMonth > 11) {
+        currentViewingMonth = 0;
+        currentViewingYear += 1;
+      } else if (currentViewingMonth < 0) {
+        currentViewingMonth = 11;
+        currentViewingYear -= 1;
+      }
+      renderCalendar(delta);
+    }
+
+    document.getElementById('btnPrevMonth').addEventListener('click', () => navigateMonth(-1));
+    document.getElementById('btnNextMonth').addEventListener('click', () => navigateMonth(1));
+    document.getElementById('btnToday').addEventListener('click', () => {
+      currentViewingYear = today.getFullYear();
+      currentViewingMonth = today.getMonth();
+      selectedDateString = formatDateKey(today);
+      renderCalendar(0);
+      renderHourlySlotSection();
+    });
+
+    // ==========================================
+    // Hourly Slot Selection Rendering
+    // ==========================================
+    const morningSlotGrid = document.getElementById('morningSlotGrid');
+    const afternoonSlotGrid = document.getElementById('afternoonSlotGrid');
+    const selectedDateDisplay = document.getElementById('selectedDateDisplay');
+    const selectedCountOnDate = document.getElementById('selectedCountOnDate');
+
+    function renderHourlySlotSection() {
+      selectedDateDisplay.firstElementChild.textContent = getKoreanDateLabel(selectedDateString);
+
+      const userSlots = meetingData[currentUserName] || new Set();
+      let countOnDate = 0;
+
+      morningSlotGrid.innerHTML = '';
+      afternoonSlotGrid.innerHTML = '';
+
+      HOURLY_SLOTS.forEach(slot => {
+        const slotKey = `${selectedDateString}_${slot.id}`;
+        const isChecked = userSlots.has(slotKey);
+        if (isChecked) countOnDate++;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `py-2.5 px-2 rounded-xl text-xs font-semibold flex flex-col items-center justify-center transition border active:scale-95 ${
+          isChecked
+            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200'
+            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+        }`;
+
+        btn.innerHTML = `
+          <span class="tracking-tight">${slot.short}</span>
+          <span class="text-[10px] font-normal opacity-80 ${isChecked ? 'text-indigo-100' : 'text-slate-400'}">
+            ${isChecked ? '가능' : '선택'}
+          </span>
+        `;
+
+        btn.addEventListener('click', () => {
+          toggleSlot(slotKey);
+        });
+
+        if (slot.period === 'morning') {
+          morningSlotGrid.appendChild(btn);
+        } else {
+          afternoonSlotGrid.appendChild(btn);
+        }
+      });
+
+      selectedCountOnDate.textContent = `${countOnDate}개 선택됨`;
+    }
+
+    function toggleSlot(slotKey) {
+      if (!currentUserName) return;
+      if (!meetingData[currentUserName]) {
+        meetingData[currentUserName] = new Set();
+      }
+
+      const userSlots = meetingData[currentUserName];
+      const willAdd = !userSlots.has(slotKey);
+
+      if (!willAdd) {
+        userSlots.delete(slotKey);
+      } else {
+        userSlots.add(slotKey);
+      }
+
+      // Sync to Supabase if connected
+      syncSlotToRemote(slotKey, willAdd);
+
+      renderHourlySlotSection();
+      renderCalendar(0);
+      updateParticipantsCountBadge();
+    }
+
+    // Bulk selection buttons
+    document.getElementById('btnQuickSelectMorning').addEventListener('click', () => {
+      if (!currentUserName) return;
+      if (!meetingData[currentUserName]) meetingData[currentUserName] = new Set();
+      const toAdd = [];
+      HOURLY_SLOTS.filter(s => s.period === 'morning').forEach(s => {
+        const sk = `${selectedDateString}_${s.id}`;
+        if (!meetingData[currentUserName].has(sk)) {
+          meetingData[currentUserName].add(sk);
+          toAdd.push(sk);
+        }
+      });
+      syncBulkSlotsToRemote(toAdd, []);
+      renderHourlySlotSection();
+      renderCalendar(0);
+      showToast("오전 시간대가 모두 선택되었습니다.");
+    });
+
+    document.getElementById('btnQuickSelectAfternoon').addEventListener('click', () => {
+      if (!currentUserName) return;
+      if (!meetingData[currentUserName]) meetingData[currentUserName] = new Set();
+      const toAdd = [];
+      HOURLY_SLOTS.filter(s => s.period === 'afternoon').forEach(s => {
+        const sk = `${selectedDateString}_${s.id}`;
+        if (!meetingData[currentUserName].has(sk)) {
+          meetingData[currentUserName].add(sk);
+          toAdd.push(sk);
+        }
+      });
+      syncBulkSlotsToRemote(toAdd, []);
+      renderHourlySlotSection();
+      renderCalendar(0);
+      showToast("오후 시간대가 모두 선택되었습니다.");
+    });
+
+    document.getElementById('btnQuickClearDate').addEventListener('click', () => {
+      if (!currentUserName) return;
+      if (!meetingData[currentUserName]) return;
+      const toRemove = [];
+      HOURLY_SLOTS.forEach(s => {
+        const sk = `${selectedDateString}_${s.id}`;
+        if (meetingData[currentUserName].has(sk)) {
+          meetingData[currentUserName].delete(sk);
+          toRemove.push(sk);
+        }
+      });
+      syncBulkSlotsToRemote([], toRemove);
+      renderHourlySlotSection();
+      renderCalendar(0);
+      showToast("해당 날짜의 선택이 초기화되었습니다.");
+    });
+
+    // ==========================================
+    // Aggregation & Heatmap Calculations (Tab 2)
+    // ==========================================
+    const resultDateScroll = document.getElementById('resultDateScroll');
+    const resultHeatmapList = document.getElementById('resultHeatmapList');
+    const goldenTimesList = document.getElementById('goldenTimesList');
+    const statParticipantCount = document.getElementById('statParticipantCount');
+    const participantChipsContainer = document.getElementById('participantChipsContainer');
+
+    function getAllDatesWithData() {
+      const dateSet = new Set();
+      // Collect dates from all users
+      Object.values(meetingData).forEach(slots => {
+        slots.forEach(slotKey => {
+          const date = slotKey.split('_')[0];
+          dateSet.add(date);
+        });
+      });
+      
+      // Always include current selected date
+      dateSet.add(selectedDateString);
+
+      return Array.from(dateSet).sort();
+    }
+
+    function renderAggregatedResults() {
+      const participantNames = Object.keys(meetingData);
+      const totalParticipants = participantNames.length;
+      statParticipantCount.textContent = totalParticipants;
+      document.getElementById('badgeParticipantCount').textContent = `${totalParticipants}명`;
+
+      // Render Participant Avatars
+      participantChipsContainer.innerHTML = '';
+      if (participantNames.length === 0) {
+        participantChipsContainer.innerHTML = '<span class="text-xs text-indigo-300">아직 응답한 참여자가 없습니다.</span>';
+      } else {
+        participantNames.forEach(name => {
+          const isMe = (name === currentUserName);
+          const chip = document.createElement('span');
+          chip.className = `text-[11px] px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 ${
+            isMe ? 'bg-indigo-500 text-white shadow-sm' : 'bg-white/20 text-indigo-100'
+          }`;
+          chip.innerHTML = `
+            <i class="fa-solid fa-user text-[9px]"></i>
+            <span>${name}${isMe ? ' (나)' : ''}</span>
+          `;
+          participantChipsContainer.appendChild(chip);
+        });
+      }
+
+      // Render Result Date Selector Buttons
+      const activeDates = getAllDatesWithData();
+      if (!activeDates.includes(activeResultDateString)) {
+        activeResultDateString = activeDates[0] || selectedDateString;
+      }
+
+      resultDateScroll.innerHTML = '';
+      activeDates.forEach(dKey => {
+        const dObj = parseDateKey(dKey);
+        const weekDay = ['일', '월', '화', '수', '목', '금', '토'][dObj.getDay()];
+        const isSelected = (dKey === activeResultDateString);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `flex-shrink-0 px-3 py-2 rounded-xl text-center border transition ${
+          isSelected 
+            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+            : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+        }`;
+
+        btn.innerHTML = `
+          <div class="text-[10px] ${isSelected ? 'text-indigo-200' : 'text-slate-400'} font-medium">${dObj.getMonth()+1}월</div>
+          <div class="text-sm font-bold">${dObj.getDate()}일 (${weekDay})</div>
+        `;
+
+        btn.addEventListener('click', () => {
+          activeResultDateString = dKey;
+          renderAggregatedResults();
+        });
+
+        resultDateScroll.appendChild(btn);
+      });
+
+      // Render Heatmap for selected result date
+      renderDateHeatmapRows(activeResultDateString, totalParticipants);
+
+      // Calculate and display Golden Times
+      calculateGoldenTimes(totalParticipants);
+    }
+
+    function renderDateHeatmapRows(dateKey, totalCount) {
+      resultHeatmapList.innerHTML = '';
+
+      HOURLY_SLOTS.forEach(slot => {
+        const slotKey = `${dateKey}_${slot.id}`;
+        
+        // Count who is available
+        const availablePeople = [];
+        const unavailablePeople = [];
+
+        Object.entries(meetingData).forEach(([userName, slots]) => {
+          if (slots.has(slotKey)) {
+            availablePeople.push(userName);
+          } else {
+            unavailablePeople.push(userName);
+          }
+        });
+
+        const availCount = availablePeople.length;
+        const ratio = totalCount > 0 ? (availCount / totalCount) : 0;
+
+        // Determine Heatmap color
+        let bgStyle = "bg-slate-50 text-slate-600 border-slate-200";
+        let barColor = "bg-slate-200";
+        if (availCount > 0) {
+          if (ratio === 1) {
+            bgStyle = "bg-emerald-600 text-white border-emerald-600 shadow-sm";
+            barColor = "bg-emerald-400";
+          } else if (ratio >= 0.7) {
+            bgStyle = "bg-emerald-500 text-white border-emerald-500";
+            barColor = "bg-emerald-300";
+          } else if (ratio >= 0.4) {
+            bgStyle = "bg-emerald-100 text-emerald-900 border-emerald-300";
+            barColor = "bg-emerald-400";
+          } else {
+            bgStyle = "bg-emerald-50 text-emerald-800 border-emerald-200";
+            barColor = "bg-emerald-300";
+          }
+        }
+
+        const row = document.createElement('div');
+        row.className = `p-2.5 rounded-xl border flex items-center justify-between transition cursor-pointer hover:shadow-sm active:scale-[0.99] ${bgStyle}`;
+        
+        const isUserIncluded = currentUserName && availablePeople.includes(currentUserName);
+
+        row.innerHTML = `
+          <div class="flex items-center space-x-3 flex-1 min-w-0 mr-2">
+            <span class="font-bold text-xs w-14 tracking-tight">${slot.id}</span>
+            <div class="flex-1 max-w-[120px] bg-black/10 rounded-full h-2 overflow-hidden">
+              <div class="${barColor} h-full rounded-full transition-all duration-300" style="width: ${ratio * 100}%"></div>
+            </div>
+            <span class="text-[11px] font-semibold opacity-90 truncate">
+              ${availCount} / ${totalCount}명
+            </span>
+          </div>
+
+          <div class="flex items-center space-x-1.5 text-xs">
+            ${isUserIncluded ? '<span class="text-[10px] bg-white/30 px-1.5 py-0.5 rounded font-bold">나 포함</span>' : ''}
+            <i class="fa-solid fa-chevron-right text-[10px] opacity-60"></i>
+          </div>
+        `;
+
+        row.addEventListener('click', () => {
+          openTimeSlotDetailModal(dateKey, slot, availablePeople, unavailablePeople);
+        });
+
+        resultHeatmapList.appendChild(row);
+      });
+    }
+
+    function calculateGoldenTimes(totalParticipants) {
+      const slotScores = [];
+
+      const activeDates = getAllDatesWithData();
+      activeDates.forEach(dKey => {
+        HOURLY_SLOTS.forEach(slot => {
+          const slotKey = `${dKey}_${slot.id}`;
+          let count = 0;
+          Object.values(meetingData).forEach(slots => {
+            if (slots.has(slotKey)) count++;
+          });
+
+          if (count > 0) {
+            slotScores.push({
+              dateKey: dKey,
+              slotId: slot.id,
+              slotLabel: slot.label,
+              count: count,
+              ratio: totalParticipants > 0 ? (count / totalParticipants) : 0
+            });
+          }
+        });
+      });
+
+      // Sort by highest count
+      slotScores.sort((a, b) => b.count - a.count);
+
+      const topThree = slotScores.slice(0, 3);
+      goldenTimesList.innerHTML = '';
+
+      if (topThree.length === 0) {
+        goldenTimesList.innerHTML = `<div class="text-slate-500 py-1">아직 선택된 일정이 없습니다. 1번 탭에서 가능한 시간을 등록해보세요!</div>`;
+        return;
+      }
+
+      topThree.forEach((item, index) => {
+        const dateObj = parseDateKey(item.dateKey);
+        const monthDay = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일`;
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between bg-white/70 p-2 rounded-xl border border-amber-200/50';
+        
+        let medal = '🥇';
+        if (index === 1) medal = '🥈';
+        if (index === 2) medal = '🥉';
+
+        div.innerHTML = `
+          <div class="flex items-center space-x-2 font-medium">
+            <span>${medal}</span>
+            <span class="font-bold text-slate-800">${monthDay}</span>
+            <span class="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-semibold">${item.slotId}</span>
+          </div>
+          <div class="font-bold ${item.count === totalParticipants ? 'text-emerald-600' : 'text-amber-800'}">
+            ${item.count}명 가능 ${item.count === totalParticipants ? '(전원 일치!)' : ''}
+          </div>
+        `;
+        goldenTimesList.appendChild(div);
+      });
+    }
+
+    // ==========================================
+    // Modals and Interactive Popovers
+    // ==========================================
+    const nameModal = document.getElementById('nameModal');
+    const nameForm = document.getElementById('nameForm');
+    const inputUserName = document.getElementById('inputUserName');
+    const currentUserNameLabel = document.getElementById('currentUserNameLabel');
+    const btnProfileBadge = document.getElementById('btnProfileBadge');
+    
+    const btnRoomBadge = document.getElementById('btnRoomBadge');
+    const currentRoomCodeLabel = document.getElementById('currentRoomCodeLabel');
+    const tabModeCreate = document.getElementById('tabModeCreate');
+    const tabModeJoin = document.getElementById('tabModeJoin');
+    const tabModeExisting = document.getElementById('tabModeExisting');
+    const sectionCreateRoom = document.getElementById('sectionCreateRoom');
+    const sectionJoinRoom = document.getElementById('sectionJoinRoom');
+    const sectionExistingRoom = document.getElementById('sectionExistingRoom');
+    const existingRoomsList = document.getElementById('existingRoomsList');
+    const btnRefreshExistingRooms = document.getElementById('btnRefreshExistingRooms');
+    const displayGeneratedCode = document.getElementById('displayGeneratedCode');
+    const btnRerollCode = document.getElementById('btnRerollCode');
+    const inputJoinRoomCode = document.getElementById('inputJoinRoomCode');
+    const inputRoomTitle = document.getElementById('inputRoomTitle');
+    const btnSwitchRoom = document.getElementById('btnSwitchRoom');
+
+    function setRoomMode(mode) {
+      roomMode = mode;
+      const activeClass = 'py-2 text-[11px] font-bold rounded-lg transition bg-white text-indigo-700 shadow-sm flex items-center justify-center';
+      const inactiveClass = 'py-2 text-[11px] font-medium rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center';
+
+      tabModeCreate.className = (mode === 'create') ? activeClass : inactiveClass;
+      tabModeJoin.className = (mode === 'join') ? activeClass : inactiveClass;
+      tabModeExisting.className = (mode === 'existing') ? activeClass : inactiveClass;
+
+      sectionCreateRoom.classList.toggle('hidden', mode !== 'create');
+      sectionJoinRoom.classList.toggle('hidden', mode !== 'join');
+      sectionExistingRoom.classList.toggle('hidden', mode !== 'existing');
+
+      if (mode === 'create') {
+        inputRoomTitle.focus();
+      } else if (mode === 'join') {
+        inputJoinRoomCode.focus();
+      } else if (mode === 'existing') {
+        fetchAndRenderExistingRooms();
+      }
+    }
+
+    tabModeCreate.addEventListener('click', () => setRoomMode('create'));
+    tabModeJoin.addEventListener('click', () => setRoomMode('join'));
+    tabModeExisting.addEventListener('click', () => setRoomMode('existing'));
+    btnRefreshExistingRooms.addEventListener('click', () => fetchAndRenderExistingRooms());
+
+    async function fetchAndRenderExistingRooms() {
+      existingRoomsList.innerHTML = `
+        <div class="p-4 text-center text-xs text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin mr-1"></i> 방 목록을 불러오는 중...
+        </div>
+      `;
+
+      const roomMap = new Map(); // room_code -> { title: string, users: Set }
+
+      // 1. Session rooms visited in memory
+      sessionVisitedRooms.forEach((title, rc) => {
+        if (!roomMap.has(rc)) roomMap.set(rc, { title: title || '모임 일정', users: new Set() });
+      });
+      if (currentRoomCode) {
+        if (!roomMap.has(currentRoomCode)) {
+          roomMap.set(currentRoomCode, { title: currentRoomTitle || '모임 일정', users: new Set() });
+        }
+      }
+
+      // 2. Query distinct rooms from Supabase if connected
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient
+            .from('availabilities')
+            .select('room_code, room_title, user_name');
+
+          if (!error && Array.isArray(data)) {
+            data.forEach(row => {
+              if (row.room_code) {
+                if (!roomMap.has(row.room_code)) {
+                  roomMap.set(row.room_code, { title: row.room_title || '모임 일정', users: new Set() });
+                }
+                const entry = roomMap.get(row.room_code);
+                if (row.room_title && (!entry.title || entry.title === '모임 일정')) {
+                  entry.title = row.room_title;
+                }
+                if (row.user_name) {
+                  entry.users.add(row.user_name);
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.warn("방 목록 불러오기 실패:", e);
+        }
+      }
+
+      existingRoomsList.innerHTML = '';
+
+      if (roomMap.size === 0) {
+        existingRoomsList.innerHTML = `
+          <div class="p-5 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+            <i class="fa-regular fa-folder-open text-base mb-1 block text-slate-300"></i>
+            아직 생성되거나 참여한 방이 없습니다.<br>
+            <span class="text-[10px] text-slate-400 font-normal">'새 방' 또는 '코드 입력'으로 입장해 보세요.</span>
+          </div>
+        `;
+        return;
+      }
+
+      // If already a selected existing room, preserve it
+      if (!selectedExistingRoomCode && currentRoomCode && roomMap.has(currentRoomCode)) {
+        selectedExistingRoomCode = currentRoomCode;
+        selectedExistingRoomTitle = roomMap.get(currentRoomCode).title;
+      }
+
+      Array.from(roomMap.entries()).forEach(([code, info]) => {
+        const userCount = info.users.size;
+        const userListPreview = Array.from(info.users).slice(0, 3).join(', ');
+        const isCurrentActive = (code === currentRoomCode);
+        const isSelected = (code === selectedExistingRoomCode);
+        const titleDisplay = info.title || '모임 일정';
+
+        const card = document.createElement('div');
+        card.className = `p-2.5 rounded-xl border text-left cursor-pointer transition flex items-center justify-between ${
+          isSelected
+            ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/30'
+            : 'bg-white hover:bg-slate-50 border-slate-200'
+        }`;
+
+        card.innerHTML = `
+          <div class="flex items-center space-x-2.5 min-w-0 flex-1 mr-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+              isSelected ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600'
+            }">
+              <i class="fa-solid fa-users text-xs"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-bold text-sm text-slate-900 truncate max-w-[130px]">${titleDisplay}</span>
+                <span class="font-mono text-xs text-indigo-600 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded">#${code}</span>
+                ${isCurrentActive ? '<span class="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-full">현재 방</span>' : ''}
+              </div>
+              <div class="text-[11px] text-slate-500 truncate mt-0.5">
+                ${userCount > 0 ? `참여자 ${userCount}명 (${userListPreview}${userCount > 3 ? ' 외' : ''})` : '참여자 아직 없음'}
+              </div>
+            </div>
+          </div>
+          <div class="flex-shrink-0">
+            <i class="fa-solid ${isSelected ? 'fa-circle-check text-indigo-600' : 'fa-circle text-slate-200'} text-base"></i>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          selectedExistingRoomCode = code;
+          selectedExistingRoomTitle = info.title;
+          fetchAndRenderExistingRooms();
+        });
+
+        existingRoomsList.appendChild(card);
+      });
+    }
+
+    btnRerollCode.addEventListener('click', () => {
+      generatedRoomCode = generate6DigitCode();
+      displayGeneratedCode.textContent = generatedRoomCode;
+    });
+
+    function updateRoomCodeDisplay() {
+      if (currentRoomCode) {
+        const titlePrefix = currentRoomTitle ? `${currentRoomTitle} ` : '';
+        currentRoomCodeLabel.textContent = `${titlePrefix}(#${currentRoomCode})`;
+      } else {
+        currentRoomCodeLabel.textContent = `방 선택`;
+      }
+    }
+
+    btnRoomBadge.addEventListener('click', () => {
+      if (currentRoomCode) {
+        const dummy = document.createElement('input');
+        dummy.value = currentRoomCode;
+        document.body.appendChild(dummy);
+        dummy.select();
+        document.execCommand('copy');
+        document.body.removeChild(dummy);
+        showToast(`방 코드 (${currentRoomCode})가 복사되었습니다!`);
+      } else {
+        promptUserName();
+      }
+    });
+
+    btnSwitchRoom.addEventListener('click', () => {
+      promptUserName();
+    });
+
+    function promptUserName() {
+      inputUserName.value = currentUserName || "";
+      inputRoomTitle.value = currentRoomTitle || "";
+      generatedRoomCode = generate6DigitCode();
+      displayGeneratedCode.textContent = generatedRoomCode;
+      
+      if (currentRoomCode) {
+        inputJoinRoomCode.value = currentRoomCode;
+      }
+      nameModal.classList.remove('hidden');
+      inputUserName.focus();
+    }
+
+    nameForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const enteredName = inputUserName.value.trim();
+      if (!enteredName) {
+        showToast("이름을 입력해 주세요.");
+        return;
+      }
+
+      let chosenRoom = "";
+      let chosenTitle = "";
+
+      if (roomMode === 'create') {
+        chosenRoom = generatedRoomCode;
+        chosenTitle = inputRoomTitle.value.trim() || "모임 일정";
+      } else if (roomMode === 'join') {
+        chosenRoom = inputJoinRoomCode.value.trim();
+        if (!/^[0-9]{6}$/.test(chosenRoom)) {
+          showToast("방 코드는 6자리 숫자로 입력해 주세요.");
+          inputJoinRoomCode.focus();
+          return;
+        }
+        chosenTitle = currentRoomTitle || "모임 일정";
+      } else if (roomMode === 'existing') {
+        if (!selectedExistingRoomCode) {
+          showToast("목록에서 입장할 방을 선택해 주세요.");
+          return;
+        }
+        chosenRoom = selectedExistingRoomCode;
+        chosenTitle = selectedExistingRoomTitle || "모임 일정";
+      }
+
+      const roomChanged = (currentRoomCode !== chosenRoom);
+      currentRoomCode = chosenRoom;
+      currentRoomTitle = chosenTitle;
+      sessionVisitedRooms.set(chosenRoom, chosenTitle);
+      updateRoomCodeDisplay();
+
+      const oldName = currentUserName;
+      currentUserName = enteredName;
+      currentUserNameLabel.textContent = currentUserName;
+
+      if (roomChanged) {
+        for (const k in meetingData) delete meetingData[k];
+      }
+
+      if (!meetingData[currentUserName]) {
+        meetingData[currentUserName] = new Set();
+      }
+
+      nameModal.classList.add('hidden');
+      showToast(`[${currentRoomTitle || currentRoomCode}] 방에 ${currentUserName}님으로 입장했습니다!`);
+      
+      if (supabaseClient) {
+        fetchRemoteAvailabilities();
+        subscribeToRemoteChanges();
+      } else {
+        updateParticipantsCountBadge();
+        renderCalendar(0);
+        renderHourlySlotSection();
+        renderAggregatedResults();
+      }
+    });
+
+    btnProfileBadge.addEventListener('click', () => {
+      promptUserName();
+    });
+
+    // Detailed Participant Modal for Heatmap slot
+    const timeDetailModal = document.getElementById('timeDetailModal');
+    const modalDetailDate = document.getElementById('modalDetailDate');
+    const modalDetailTime = document.getElementById('modalDetailTime');
+    const modalAvailCount = document.getElementById('modalAvailCount');
+    const modalAvailList = document.getElementById('modalAvailList');
+    const modalUnavailCount = document.getElementById('modalUnavailCount');
+    const modalUnavailList = document.getElementById('modalUnavailList');
+    const btnCloseTimeDetail = document.getElementById('btnCloseTimeDetail');
+    const btnModalCloseConfirm = document.getElementById('btnModalCloseConfirm');
+
+    function openTimeSlotDetailModal(dateKey, slot, availList, unavailList) {
+      modalDetailDate.textContent = getKoreanDateLabel(dateKey);
+      modalDetailTime.textContent = `${slot.label} 일정 현황`;
+      
+      modalAvailCount.textContent = availList.length;
+      modalAvailList.innerHTML = '';
+      if (availList.length === 0) {
+        modalAvailList.innerHTML = '<span class="text-xs text-slate-400">가능한 사람이 없습니다.</span>';
+      } else {
+        availList.forEach(name => {
+          const span = document.createElement('span');
+          span.className = 'text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center gap-1';
+          span.innerHTML = `<i class="fa-solid fa-check text-[10px]"></i> ${name}`;
+          modalAvailList.appendChild(span);
+        });
+      }
+
+      modalUnavailCount.textContent = unavailList.length;
+      modalUnavailList.innerHTML = '';
+      if (unavailList.length === 0) {
+        modalUnavailList.innerHTML = '<span class="text-xs text-slate-400">불가능한 사람이 없습니다. (전원 가능!)</span>';
+      } else {
+        unavailList.forEach(name => {
+          const span = document.createElement('span');
+          span.className = 'text-xs font-medium px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg';
+          span.textContent = name;
+          modalUnavailList.appendChild(span);
+        });
+      }
+
+      timeDetailModal.classList.remove('hidden');
+    }
+
+    [btnCloseTimeDetail, btnModalCloseConfirm].forEach(btn => {
+      btn.addEventListener('click', () => {
+        timeDetailModal.classList.add('hidden');
+      });
+    });
+
+    // Supabase Settings Modal Wiring
+    const supabaseModal = document.getElementById('supabaseModal');
+    const btnOpenSupabaseModal = document.getElementById('btnOpenSupabaseModal');
+    const btnCloseSupabaseModal = document.getElementById('btnCloseSupabaseModal');
+    const supabaseForm = document.getElementById('supabaseForm');
+    const inputSupabaseUrl = document.getElementById('inputSupabaseUrl');
+    const inputSupabaseKey = document.getElementById('inputSupabaseKey');
+    const btnDisconnectSupabase = document.getElementById('btnDisconnectSupabase');
+
+    btnOpenSupabaseModal.addEventListener('click', () => {
+      inputSupabaseUrl.value = SUPABASE_CONFIG.url || "";
+      inputSupabaseKey.value = SUPABASE_CONFIG.anonKey || "";
+      supabaseModal.classList.remove('hidden');
+    });
+
+    btnCloseSupabaseModal.addEventListener('click', () => {
+      supabaseModal.classList.add('hidden');
+    });
+
+    supabaseForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const u = sanitizeSupabaseUrl(inputSupabaseUrl.value);
+      const k = sanitizeSupabaseKey(inputSupabaseKey.value);
+      if (!u || !k) {
+        showToast("URL과 Key를 모두 입력해주세요.");
+        return;
+      }
+      SUPABASE_CONFIG.url = u;
+      SUPABASE_CONFIG.anonKey = k;
+
+      // 주소창 URL Hash에 접속 정보 유지 (새로고침해도 보존)
+      const currentHashParams = new URLSearchParams(window.location.hash.substring(1));
+      currentHashParams.set('sb_url', encodeURIComponent(u));
+      currentHashParams.set('sb_key', encodeURIComponent(k));
+      if (currentRoomCode) currentHashParams.set('room', currentRoomCode);
+      window.location.hash = currentHashParams.toString();
+
+      await initSupabase(u, k);
+      supabaseModal.classList.add('hidden');
+    });
+
+    btnDisconnectSupabase.addEventListener('click', () => {
+      SUPABASE_CONFIG.url = "";
+      SUPABASE_CONFIG.anonKey = "";
+      inputSupabaseUrl.value = "";
+      inputSupabaseKey.value = "";
+      if (realtimeChannel && supabaseClient) {
+        supabaseClient.removeChannel(realtimeChannel);
+      }
+      supabaseClient = null;
+      updateSupabaseUIStatus(false);
+      supabaseModal.classList.add('hidden');
+      showToast("Supabase 연결이 해제되었습니다.");
+    });
+
+    // Refresh Results button in Tab 2
+    document.getElementById('btnRefreshResults').addEventListener('click', () => {
+      if (supabaseClient) {
+        fetchRemoteAvailabilities();
+      } else {
+        renderAggregatedResults();
+      }
+      showToast("최신 일정을 반영했습니다.");
+    });
+
+    // Toast helper
+    function showToast(msg) {
+      const toast = document.getElementById('toastNotification');
+      const toastMsg = document.getElementById('toastMessage');
+      toastMsg.textContent = msg;
+      
+      toast.classList.remove('opacity-0', 'translate-y-4');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 2200);
+    }
+
+    // Share link button
+    document.getElementById('btnShareLink').addEventListener('click', () => {
+      let shareUrl = window.location.origin + window.location.pathname;
+      const params = new URLSearchParams();
+
+      if (currentRoomCode) {
+        params.set('room', currentRoomCode);
+        if (currentRoomTitle) {
+          params.set('title', encodeURIComponent(currentRoomTitle));
+        }
+      }
+
+      // Supabase가 연결되어 있으면 공유 링크 뒤에 자동으로 DB 접속 정보와 방 코드 포함
+      if (SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+        params.set('sb_url', encodeURIComponent(SUPABASE_CONFIG.url));
+        params.set('sb_key', encodeURIComponent(SUPABASE_CONFIG.anonKey));
+      }
+
+      const paramStr = params.toString();
+      if (paramStr) {
+        shareUrl += '#' + paramStr;
+      }
+
+      const dummyInput = document.createElement('input');
+      dummyInput.value = shareUrl;
+      document.body.appendChild(dummyInput);
+      dummyInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(dummyInput);
+
+      if (currentRoomCode) {
+        showToast(`[${currentRoomTitle || currentRoomCode}] 초대 링크가 복사되었습니다!`);
+      } else {
+        showToast('초대 링크가 복사되었습니다.');
+      }
+    });
+
+    function updateParticipantsCountBadge() {
+      const count = Object.keys(meetingData).length;
+      document.getElementById('badgeParticipantCount').textContent = `${count}명`;
+    }
+
+    // ==========================================
+    // Tabs Navigation & Bootstrapping
+    // ==========================================
+    const tabBtn1 = document.getElementById('tabBtn1');
+    const tabBtn2 = document.getElementById('tabBtn2');
+    const tabContent1 = document.getElementById('tabContent1');
+    const tabContent2 = document.getElementById('tabContent2');
+    const btnGoToResultTab = document.getElementById('btnGoToResultTab');
+
+    function switchTab(tabNum) {
+      activeTab = tabNum;
+      if (tabNum === 1) {
+        tabBtn1.className = 'flex-1 py-3 text-sm font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center justify-center gap-2 transition-all';
+        tabBtn2.className = 'flex-1 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent flex items-center justify-center gap-2 transition-all';
+        tabContent1.classList.remove('hidden');
+        tabContent2.classList.add('hidden');
+        renderCalendar(0);
+        renderHourlySlotSection();
+      } else {
+        tabBtn2.className = 'flex-1 py-3 text-sm font-semibold text-indigo-600 border-b-2 border-indigo-600 flex items-center justify-center gap-2 transition-all';
+        tabBtn1.className = 'flex-1 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent flex items-center justify-center gap-2 transition-all';
+        tabContent2.classList.remove('hidden');
+        tabContent1.classList.add('hidden');
+        renderAggregatedResults();
+      }
+    }
+
+    tabBtn1.addEventListener('click', () => switchTab(1));
+    tabBtn2.addEventListener('click', () => switchTab(2));
+    btnGoToResultTab.addEventListener('click', () => switchTab(2));
+
+    // Boot App on load
+    window.addEventListener('DOMContentLoaded', () => {
+      // 자동으로 수파베이스 연결 (공유 링크 파라미터 또는 코드 설정)
+      displayGeneratedCode.textContent = generatedRoomCode;
+      loadAutoSupabaseConfig();
+      updateRoomCodeDisplay();
+      promptUserName();
+      renderCalendar(0);
+      renderHourlySlotSection();
+      updateParticipantsCountBadge();
+    });
+  </script>
+</body>
+</html>
+```
